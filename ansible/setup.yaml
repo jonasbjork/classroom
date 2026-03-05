@@ -1,0 +1,123 @@
+- hosts: all
+  user: root
+  gather_facts: no
+
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ssh_user: "student"
+    ssh_pass: "Vinter23Kurs!"
+
+  tasks:
+    - name: Wait for SSH
+      wait_for_connection:
+        delay: 5
+        timeout: 300
+    
+    - name: Make resolv great again!
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        content: |
+          nameserver 1.1.1.1
+          nameserver 9.9.9.9
+
+
+    - name: Set timezone
+      community.general.timezone:
+        name: Europe/Stockholm
+
+    - name: Upgrade all packages
+      ansible.builtin.package:
+        name: '*'
+        state: latest
+        update_cache: false
+
+    - name: Import EPEL GPG key
+      rpm_key:
+        key: https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9
+        state: present
+
+    - name: Enable EPEL-repo
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        state: present
+
+    - name: Install packages
+      ansible.builtin.dnf:
+        name:
+          - fail2ban
+          - nano
+          - podman
+          - git-core
+          - jq
+          - bash-completion
+          - podman-compose
+        state: latest
+        update_cache: yes
+
+    - name: Create fail2ban configuration
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [DEFAULT]
+          bantime  = 21600
+          findtime  = 3600
+          maxretry = 3
+          banaction = iptables-multiport
+          backend = systemd
+
+          [sshd]
+          enabled = true
+
+    - name: Start fail2ban service
+      ansible.builtin.systemd:
+        state: started
+        name: fail2ban
+
+    - name: Set nano as default editor
+      ansible.builtin.lineinfile:
+        path: /etc/profile
+        line: export EDITOR=nano
+        create: yes
+
+    - name: Create user account
+      ansible.builtin.user:
+        name: "{{ ssh_user }}"
+        groups: wheel
+        append: yes
+        createhome: yes
+        state: present
+        password: "{{ ssh_pass | password_hash('sha512') }}"
+        update_password: on_create
+
+    - name: Set enforce for SELinux
+      replace:
+        path: /etc/selinux/config
+        regexp: '^SELINUX=.*'
+        replace: 'SELINUX=enforcing'
+
+    - name: Apply enforcing mode (else we need restart)
+      command: /usr/sbin/setenforce 1
+
+    - name: Remove Hetzner password no
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        state: absent
+      notify: Reload SSH
+
+    - name: Allow password login for ssh
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: '^PasswordAuthentication no'
+        line: 'PasswordAuthentication yes'
+      notify: Reload SSH
+
+
+  handlers:
+    - name: Reload SSH
+      service:
+        name: sshd
+        state: reloaded
+
+
+
