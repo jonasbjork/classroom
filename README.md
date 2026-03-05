@@ -3,7 +3,7 @@ Set up lab environment for class.
 
 You need to have Terraform or opentofu installed. Also Ansible is needed.
 
-I am using Hetzner Cloud for this setup, but it could be changed to other cloud providers too. I have used Amazon Web Services and Digital Ocean in the past.
+I am using [Hetzner Cloud](https://hetzner.cloud/?ref=VO2m2lpX8EoQ) for this setup, but it could be changed to other cloud providers too. I have used Amazon Web Services and Digital Ocean in the past.
 
 Usage is described further down, please read the info blocks first.
 
